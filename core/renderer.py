@@ -140,13 +140,13 @@ def add_top_legend(root, party_colors, party_seats, custom_title, stroke_width=1
         seat_text.set('style', f"font-size:32px; font-family:sans-serif; font-weight:bold; text-anchor:middle; fill:{pure_hex};")
 
 
-def render_map_to_file(svg_path, csv_path, output_path, map_title, stroke_width_str="1.0"):
+def render_map_from_data(svg_path, output_path, district_data, party_colors, party_seats, map_title, stroke_width_str="1.0"):
     """
-    [纯函数] 读取SVG和CSV，渲染并保存
-    返回: (Success: bool, Message: str)
+    [纯函数] 接收处理好的数据字典，渲染SVG并保存
+    不再负责读取CSV文件，只负责画图
     """
-    if not os.path.exists(svg_path) or not os.path.exists(csv_path):
-        return False, "输入文件路径不存在"
+    if not os.path.exists(svg_path):
+        return False, "SVG 模板文件不存在"
 
     try:
         # 处理描边宽度参数
@@ -159,63 +159,7 @@ def render_map_to_file(svg_path, csv_path, output_path, map_title, stroke_width_
         province_stroke = base_stroke_width + 1.5 
         if province_stroke < 1.0: province_stroke = 1.5 
 
-        # === 1. 解析 CSV 数据 ===
-        party_colors = {}
-        district_data = {} 
-        party_seats = {} 
-        
-        with open(csv_path, 'r', encoding='utf-8-sig') as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-            
-            if not rows or rows[0][0] != "META":
-                return False, "CSV 格式错误: 缺少 META 行"
-            
-            meta_row = rows[0]
-            for item in meta_row[1:]:
-                if ':' in item:
-                    name, color = item.split(':')
-                    party_colors[name] = color.strip()
-                    party_seats[name] = 0 
-
-            header = rows[1] 
-            col_map = header[2:] 
-            
-            for row in rows[2:]:
-                if len(row) < 3: continue
-                d_id = row[1] 
-                try:
-                    votes = [int(v) for v in row[2:]]
-                    total_votes = sum(votes)
-                    max_votes = max(votes)
-                    
-                    if total_votes == 0:
-                        district_data[d_id] = {'color': '#e0e0e0', 'rate': 0}
-                    else:
-                        winner_idx = votes.index(max_votes)
-                        if winner_idx < len(col_map):
-                            winner_party = col_map[winner_idx]
-                            base_color = party_colors.get(winner_party, "#aaaaaa")
-                            
-                            # 统计席位
-                            party_seats[winner_party] = party_seats.get(winner_party, 0) + 1
-                            
-                            win_rate = max_votes / total_votes
-                            # 调用导入的函数
-                            final_color = get_color_intensity(base_color, win_rate)
-                            
-                            # 保存更多数据供前端使用
-                            district_data[d_id] = {
-                                'color': final_color, 
-                                'rate': win_rate,
-                                'winner_name': winner_party # 记录赢家名字
-                            }
-                        else:
-                            district_data[d_id] = {'color': '#ffffff', 'rate': 0}    
-                except ValueError:
-                    continue
-
-        # === 2. SVG 渲染 ===
+        # === SVG 渲染 ===
         ET.register_namespace("", "http://www.w3.org/2000/svg")
         tree = ET.parse(svg_path)
         root = tree.getroot()
@@ -248,29 +192,28 @@ def render_map_to_file(svg_path, csv_path, output_path, map_title, stroke_width_
                         if 'winner_name' in data:
                             element.set('data-party', data['winner_name'])
                         
+                        style = f"fill:{fill_color}; stroke:#FFFFFF; stroke-width:{district_stroke}; stroke-linejoin:round;"
+                        element.set('style', style)
+                        matches += 1
                     else:
-                        fill_color = "#e0e0e0"
-                    
-                    style = f"fill:{fill_color}; stroke:#FFFFFF; stroke-width:{district_stroke}; stroke-linejoin:round;"
-                    element.set('style', style)
-                    matches += 1
+                        # 无数据区域，默认填充灰白
+                        style = f"fill:#f0f0f0; stroke:#FFFFFF; stroke-width:{district_stroke}; stroke-linejoin:round;"
+                        element.set('style', style)
                     
                 # C. 省界 (透底黑边)
                 elif d_id:
                     style = f"fill:none; stroke:#000000; stroke-width:{province_stroke}; stroke-linejoin:round; stroke-linecap:round;"
                     element.set('style', style)
 
-        # === 3. 添加图例 ===
-        # 修正处：这里传入 root，而不是 tree
+        # === 添加图例 ===
         add_top_legend(root, party_colors, party_seats, map_title, district_stroke)
         
-        # === 4. 保存 ===
+        # === 保存 ===
         tree.write(output_path)
         
         return True, f"成功渲染 {matches} 个选区"
 
     except Exception as e:
-        # 打印错误堆栈方便调试
         import traceback
         traceback.print_exc()
         return False, str(e)

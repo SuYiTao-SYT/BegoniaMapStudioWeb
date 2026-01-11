@@ -1,93 +1,135 @@
 body { margin: 0; font-family: 'Segoe UI', sans-serif; background-color: #f4f4f9; height: 100vh; overflow: hidden; }
 
-.container { display: flex; height: 100%; }
+.container { display: flex; height: 100%; width: 100%; }
 
-/* 左侧栏 */
+/* === 左侧栏 === */
 .sidebar {
-    width: 320px;
-    background: white;
-    padding: 20px;
+    width: 300px; background: white; padding: 20px;
     box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    z-index: 10;
+    display: flex; flex-direction: column; gap: 20px; z-index: 20; /* 提高层级 */
+    flex-shrink: 0;
 }
-
 h1 { color: #333; font-size: 24px; margin-top: 0; }
 h3 { font-size: 16px; color: #666; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
-
 .card { background: #fff; }
 .form-group { margin-bottom: 15px; }
 label { display: block; font-size: 14px; margin-bottom: 5px; color: #555; }
-input[type="text"], select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;}
-input[type="file"] { font-size: 12px; }
-
+input[type="text"], select, input[type="file"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;}
 button#renderBtn {
     width: 100%; padding: 12px; background: #3366CC; color: white; border: none;
     border-radius: 4px; cursor: pointer; font-size: 16px; transition: 0.2s;
 }
 button#renderBtn:hover { background: #254db3; }
-
 .btn-download {
     display: block; width: 100%; padding: 12px; background: #28a745; color: white;
     text-align: center; text-decoration: none; border-radius: 4px; box-sizing: border-box;
 }
 
-/* 右侧预览区 */
+/* === 中间：预览区 (视口) === */
 .preview-area {
     flex: 1;
     background: #e0e0e0;
     position: relative;
-    overflow: auto; /* 允许滚动 */
+    overflow: hidden; /* 隐藏溢出 */
     display: flex;
     justify-content: center;
-    align-items: flex-start;
-    padding: 40px;
+    align-items: center;
+    cursor: grab;
 }
+.preview-area:active { cursor: grabbing; }
 
+/* 实际的 SVG 容器 (被缩放的对象) */
 .svg-wrapper {
     background: white;
     box-shadow: 0 0 20px rgba(0,0,0,0.2);
-    /* 限制最大宽度，防止过大 */
-    max-width: 95%; 
+    transform-origin: center center;
+    transition: transform 0.1s linear;
+    
+    /* === 关键修复：给一个基础宽度，否则缩放计算会出错 === */
+    width: 90%; 
+    min-width: 600px; /* 防止缩得太小看不见 */
+    display: flex;    /* 消除底部间隙 */
+    justify-content: center;
 }
 
-.placeholder { padding: 50px; color: #999; }
-
-/* 交互特效 */
-path[data-rate] { cursor: pointer; transition: opacity 0.15s; }
-path[data-rate]:hover { opacity: 0.7; stroke: #FFFF00 !important; stroke-width: 2px !important; }
-
-/* Tooltip */
-.tooltip {
-    position: absolute;
-    background: rgba(0, 0, 0, 0.85);
-    color: white;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 14px;
-    pointer-events: none;
-    display: none;
-    z-index: 1000;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-}
-
-/* 强制修正 SVG 的显示尺寸 */
 #svgContainer svg {
-    width: 100% !important;  /* 强制宽度撑满容器 */
-    height: auto !important; /* 高度自动按比例 */
-    display: block;          /* 防止底部留白 */
-    background-color: white; /* 加上白底，防止透明看不清 */
+    /* === 关键修复：SVG 必须填满容器 === */
+    width: 100% !important;
+    height: auto !important;
+    display: block;
+    background-color: white;
+    pointer-events: auto; /* 确保能接收点击 */
 }
 
-/* 确保预览区能滚动 */
-.preview-area {
-    display: block; /* 改为 block 方便滚动 */
-    text-align: center;
+/* 缩放控制器 */
+.zoom-controls {
+    position: absolute; bottom: 20px; left: 20px;
+    display: flex; gap: 5px; z-index: 100;
+}
+.zoom-controls button {
+    width: 36px; height: 36px; background: white; border: 1px solid #ccc;
+    border-radius: 4px; font-size: 18px; cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+.zoom-controls button:hover { background: #f0f0f0; }
+
+/* === 右侧：编辑面板 === */
+.editor-panel {
+    width: 0; background: white; border-left: 1px solid #ddd;
+    box-shadow: -2px 0 10px rgba(0,0,0,0.05);
+    transition: width 0.3s ease;
+    overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0;
+    z-index: 15;
+}
+.editor-panel.open { width: 360px; } /* 稍微加宽一点给滑条 */
+
+.panel-header {
+    padding: 15px 20px; background: #f8f8f8; border-bottom: 1px solid #eee;
+    display: flex; justify-content: space-between; align-items: center;
+    white-space: nowrap;
+}
+.panel-header h3 { margin: 0; }
+.panel-header button { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+
+.panel-content {
+    padding: 20px; overflow-y: auto; flex: 1; min-width: 360px;
 }
 
-.svg-wrapper {
-    display: inline-block; /* 让容器包裹 SVG */
-    width: 95%;
+/* === 编辑控件样式 === */
+.control-bar {
+    display: flex; align-items: center; justify-content: flex-end;
+    margin-bottom: 15px; font-size: 13px; color: #555;
+    background: #f0f0f0; padding: 8px; border-radius: 4px;
 }
+.vote-row {
+    background: #f9f9f9; border: 1px solid #eee; border-radius: 6px;
+    padding: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;
+}
+.row-top { display: flex; justify-content: space-between; align-items: center; }
+.vote-name { font-weight: bold; font-size: 14px; color: #333; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vote-input { width: 70px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; text-align: right; font-weight: bold; }
+
+/* 修复滑条挤压问题 */
+.row-bottom { display: flex; align-items: center; gap: 10px; width: 100%; }
+.vote-slider { 
+    flex: 1; /* 自动占据剩余空间 */
+    cursor: pointer; height: 4px; min-width: 50px; 
+}
+.vote-percent { 
+    width: 48px; /* 固定宽度，防止被挤没了 */
+    min-width: 48px; /* 强制不许缩小 */
+    text-align: right; font-size: 12px; color: #666; font-family: monospace; 
+}
+
+.btn-save { width: 100%; margin-top: 20px; background: #28a745; color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+.btn-save:hover { background: #218838; }
+
+/* Tooltip & Interactive */
+path[data-rate] { cursor: pointer; transition: opacity 0.15s; }
+path[data-rate]:hover { opacity: 0.8; stroke: #FFFF00 !important; stroke-width: 2px !important; }
+.tooltip {
+    position: absolute; background: rgba(0, 0, 0, 0.85); color: white;
+    padding: 8px 12px; border-radius: 6px; font-size: 14px; pointer-events: none;
+    display: none; z-index: 9999; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+.placeholder { padding: 50px; color: #999; }

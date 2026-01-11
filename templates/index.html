@@ -48,15 +48,47 @@
             </div>
         </div>
 
-        <div class="preview-area">
+        <div class="preview-area" id="mapViewport">
+            <div class="zoom-controls">
+                <button onclick="zoomMap(0.2)" title="放大">+</button>
+                <button onclick="zoomMap(-0.2)" title="缩小">-</button>
+                <button onclick="resetZoom()" title="重置">⟲</button>
+            </div>
+
             <div id="svgContainer" class="svg-wrapper">
                 <div class="placeholder">请上传文件并点击生成...</div>
             </div>
         </div>
+
+        <div id="editorPanel" class="editor-panel">
+            <div class="panel-header">
+                <h3 id="panelTitle">选区编辑</h3>
+                <button onclick="closePanel()" title="关闭面板">×</button>
+            </div>
+            
+            <div class="panel-content">
+                <div class="section">
+                    <label>类型:</label>
+                    <select id="editType">
+                        <option value="FPTP">小选区 (1席)</option>
+                        <option value="PR">比例代表</option>
+                    </select>
+                    <label>席位:</label>
+                    <input type="number" id="editSeats" style="width:50px">
+                </div>
+
+                <hr>
+
+                <div id="voteInputs" class="vote-list"></div>
+
+                <button class="btn-save" onclick="saveChanges()">💾 保存并更新</button>
+            </div>
+        </div>
+
     </div>
 
     <div id="tooltip" class="tooltip"></div>
-
+    
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
