@@ -97,43 +97,54 @@ class DataManager:
 
     def get_joined_data(self):
         """
-        [给渲染器用] 读取三张表，在内存中拼合成渲染器需要的数据格式
-        返回: 
-        - district_data: { 'XJ-1': {'color': '#xxx', 'rate': 0.55, 'winner_name': 'LDP'} }
-        - party_colors: {'LDP': '#3366CC', ...}
-        - party_seats: {'LDP': 10, ...}
+        [给渲染器用] 读取三张表，拼合数据
+        逻辑更新：
+        1. 席位统计基于 districts.csv 里的 Seats 值
+        2. 如果 Seats == 0，则不计入席位，且地图上可能需要特殊处理
         """
-        # 1. 读取政党信息 (Parties)
+        # 1. 读取政党信息
         party_colors = {}
-        party_names = {} # ID -> Name
+        party_names = {}
         with open(self.files['parties'], 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 pid = row['Party_ID']
                 party_colors[row['Name_CN']] = row['Color']
-                party_names[pid] = row['Name_CN'] # 建立 ID 到名字的映射
+                party_names[pid] = row['Name_CN']
 
-        # 2. 读取选情数据 (Votes)
+        # 2. 读取选区基础信息 (获取席位设定)
+        district_meta = {} # { 'XJ-1': 1, 'XJ-2': 0 }
+        with open(self.files['districts'], 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # 容错处理：确保Seats是数字
+                try:
+                    seats = int(row['Seats'])
+                except:
+                    seats = 1
+                district_meta[row['District_ID']] = seats
+
+        # 3. 读取选情数据
         district_data = {}
-        party_seats = {name: 0 for name in party_colors.keys()} # 初始化席位
-
-        # 需要在这里导入颜色计算函数，避免循环引用可以放在函数内或者移动utils
+        party_seats = {name: 0 for name in party_colors.keys()}
+        
         from .color_utils import get_color_intensity
 
         with open(self.files['votes'], 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
-            # 获取所有政党ID列（排除District_ID）
             party_ids = [field for field in reader.fieldnames if field != 'District_ID']
             
             for row in reader:
                 d_id = row['District_ID']
                 
+                # 获取该区席位数，默认为1
+                seats_count = district_meta.get(d_id, 1)
+
                 # 找出票数最高的
                 max_votes = -1
                 winner_pid = None
                 total_votes = 0
                 
-                valid_row = True
                 for pid in party_ids:
                     try:
                         votes = int(row[pid])
@@ -142,15 +153,18 @@ class DataManager:
                             max_votes = votes
                             winner_pid = pid
                     except ValueError:
-                        continue # 跳过非数字
+                        continue 
                 
-                if total_votes > 0 and winner_pid:
+                # 只有当总票数>0 且 席位数>0 时，才算有效选举
+                if total_votes > 0 and winner_pid and seats_count > 0:
                     winner_name = party_names.get(winner_pid, winner_pid)
                     base_color = party_colors.get(winner_name, "#aaaaaa")
                     
-                    # 统计席位 (简单起见，假设每个区1席，如果需要支持多席位，需读取districts表)
+                    # === 关键修改：统计席位 ===
+                    # 简单模型：该区赢家拿走该区所有席位
+                    # (如果是比例代表制，这里需要更复杂的 D'Hondt 算法，目前暂按赢者通吃或单席位处理)
                     if winner_name in party_seats:
-                        party_seats[winner_name] += 1
+                        party_seats[winner_name] += seats_count
                     
                     win_rate = max_votes / total_votes
                     final_color = get_color_intensity(base_color, win_rate)
@@ -158,12 +172,69 @@ class DataManager:
                     district_data[d_id] = {
                         'color': final_color,
                         'rate': win_rate,
-                        'winner_name': winner_name
+                        'winner_name': winner_name,
+                        'seats': seats_count 
                     }
                 else:
-                    district_data[d_id] = {'color': '#ffffff', 'rate': 0, 'winner_name': 'No Data'}
+                    # 0席位(无改选) 或 无数据
+                    district_data[d_id] = {
+                        'color': '#eeeeee', # 灰色
+                        'rate': 0, 
+                        'winner_name': '无改选' if seats_count == 0 else 'No Data',
+                        'seats': seats_count
+                    }
 
         return district_data, party_colors, party_seats
+
+    def update_district_data(self, district_id, new_seats, new_votes_dict):
+        """
+        [写 - 升级版] 同时更新席位(districts.csv)和票数(votes.csv)
+        """
+        # --- 1. 更新 Districts 表 (席位) ---
+        dist_rows = []
+        dist_fieldnames = []
+        with open(self.files['districts'], 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            dist_fieldnames = reader.fieldnames
+            dist_rows = list(reader)
+        
+        # 查找并修改
+        found_dist = False
+        for row in dist_rows:
+            if row['District_ID'] == district_id:
+                row['Seats'] = str(new_seats)
+                # 既然删除了Type下拉框，这里我们可以默认保持原样，或者统一设为Custom
+                found_dist = True
+                break
+        
+        # 如果没找到(新选区)，需要追加逻辑(暂略，假设ID都存在)
+        
+        with open(self.files['districts'], 'w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=dist_fieldnames)
+            writer.writeheader()
+            writer.writerows(dist_rows)
+
+        # --- 2. 更新 Votes 表 (票数) ---
+        vote_rows = []
+        vote_fieldnames = []
+        with open(self.files['votes'], 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            vote_fieldnames = reader.fieldnames
+            vote_rows = list(reader)
+            
+        for row in vote_rows:
+            if row['District_ID'] == district_id:
+                for party_id, count in new_votes_dict.items():
+                    if party_id in vote_fieldnames:
+                        row[party_id] = count
+                break
+        
+        with open(self.files['votes'], 'w', encoding='utf-8-sig', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=vote_fieldnames)
+            writer.writeheader()
+            writer.writerows(vote_rows)
+            
+        return True
     def get_district_detail(self, district_id):
         """
         [读] 获取指定选区的所有详情：基础属性 + 当前各党得票 (带政党名字)

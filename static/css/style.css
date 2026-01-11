@@ -81,7 +81,7 @@ button#renderBtn:hover { background: #254db3; }
     overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0;
     z-index: 15;
 }
-.editor-panel.open { width: 360px; } /* 稍微加宽一点给滑条 */
+.editor-panel.open { width: 380px; } /* 稍微加宽一点给滑条 */
 
 .panel-header {
     padding: 15px 20px; background: #f8f8f8; border-bottom: 1px solid #eee;

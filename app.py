@@ -114,11 +114,22 @@ def update_district_api():
         req = request.json
         did = req.get('district_id')
         votes = req.get('votes') 
+        seats = req.get('seats') # 新增参数
         
-        data_mgr.update_district_votes(did, votes)
+        # 确保 seats 是整数
+        try:
+            seats = int(seats)
+        except:
+            seats = 1
+
+        # 调用新的更新方法
+        data_mgr.update_district_data(did, seats, votes)
+        
         return jsonify({'status': 'success'})
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

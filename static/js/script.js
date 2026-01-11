@@ -198,8 +198,8 @@ async function openEditor(id) {
             const data = json.data;
             title.textContent = `编辑: ${id}`;
             
-            document.getElementById('editSeats').value = data.info.Seats || 1;
-            document.getElementById('editType').value = data.info.Type || 'FPTP';
+            // 填充席位 (不再处理 Type)
+            document.getElementById('editSeats').value = (data.info.Seats !== undefined) ? data.info.Seats : 1;
             
             inputsContainer.innerHTML = ''; 
 
@@ -315,6 +315,10 @@ async function saveChanges() {
     btn.textContent = "正在保存...";
     btn.disabled = true;
 
+    // 1. 获取席位数据
+    const seatsVal = document.getElementById('editSeats').value;
+
+    // 2. 获取票数数据
     const inputs = document.querySelectorAll('.vote-input');
     const newVotes = {};
     inputs.forEach(input => {
@@ -327,6 +331,7 @@ async function saveChanges() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 district_id: currentEditingId,
+                seats: seatsVal, // 发送席位数据
                 votes: newVotes
             })
         });

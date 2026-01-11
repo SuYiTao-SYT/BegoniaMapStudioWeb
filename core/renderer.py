@@ -184,19 +184,30 @@ def render_map_from_data(svg_path, output_path, district_data, party_colors, par
                 elif '-' in d_id:
                     data = district_data.get(d_id)
                     if data:
-                        fill_color = data['color']
-                        rate_percent = f"{int(data['rate'] * 100)}%"
+                        # === 关键逻辑：处理0席位 ===
+                        seats = data.get('seats', 1)
                         
-                        # === 埋入数据给前端 JS 使用 ===
-                        element.set('data-rate', rate_percent)
-                        if 'winner_name' in data:
-                            element.set('data-party', data['winner_name'])
+                        if seats == 0:
+                            # 0席位模式：强制灰色 / 条纹
+                            # 我们可以用灰色表示"无改选"
+                            fill_color = "#eeeeee" 
+                            # 或者你可以定义一个特殊的 pattern，但灰色最简单
+                            
+                            # 虽然不改选，但也可以显示个提示
+                            element.set('data-rate', '非改选')
+                            element.set('data-party', '无')
+                        else:
+                            fill_color = data['color']
+                            rate_percent = f"{int(data['rate'] * 100)}%"
+                            element.set('data-rate', rate_percent)
+                            if 'winner_name' in data:
+                                element.set('data-party', data['winner_name'])
                         
                         style = f"fill:{fill_color}; stroke:#FFFFFF; stroke-width:{district_stroke}; stroke-linejoin:round;"
                         element.set('style', style)
                         matches += 1
                     else:
-                        # 无数据区域，默认填充灰白
+                        # 无数据
                         style = f"fill:#f0f0f0; stroke:#FFFFFF; stroke-width:{district_stroke}; stroke-linejoin:round;"
                         element.set('style', style)
                     
