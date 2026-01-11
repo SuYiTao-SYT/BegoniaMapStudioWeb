@@ -38,29 +38,47 @@ button#renderBtn:hover { background: #254db3; }
 }
 .preview-area:active { cursor: grabbing; }
 
-/* 实际的 SVG 容器 (被缩放的对象) */
+/* 实际的 SVG 容器 */
 .svg-wrapper {
     background: white;
     box-shadow: 0 0 20px rgba(0,0,0,0.2);
-    transform-origin: center center;
-    transition: transform 0.1s linear;
     
-    /* === 关键修复：给一个基础宽度，否则缩放计算会出错 === */
+    /* === 核心修正：必须设为 0 0，否则 JS 算的坐标会对不上 === */
+    transform-origin: 0 0; 
+    
+    transition: transform 0.05s linear; 
     width: 90%; 
-    min-width: 600px; /* 防止缩得太小看不见 */
-    display: flex;    /* 消除底部间隙 */
+    min-width: 600px;
+    display: flex;
     justify-content: center;
+    will-change: transform;
+    contain: layout paint style;
+    backface-visibility: hidden;
 }
 
 #svgContainer svg {
-    /* === 关键修复：SVG 必须填满容器 === */
     width: 100% !important;
     height: auto !important;
     display: block;
     background-color: white;
-    pointer-events: auto; /* 确保能接收点击 */
+    pointer-events: auto;
+    
+    /* 默认开启抗锯齿，线条平滑 */
+    shape-rendering: geometricPrecision; 
 }
 
+/* === 新增：高性能模式 === */
+/* 当容器拥有 .fast-mode 类时，强制切换渲染模式 */
+#svgContainer.fast-mode svg {
+    /* 牺牲画质(边缘有锯齿)，换取极速渲染 */
+    shape-rendering: optimizeSpeed !important; 
+    
+    /* 可选：关闭文本抗锯齿，进一步提速 */
+    text-rendering: optimizeSpeed !important; 
+    
+    /* 可选：简化合成运算 */
+    image-rendering: pixelated;
+}
 /* 缩放控制器 */
 .zoom-controls {
     position: absolute; bottom: 20px; left: 20px;
@@ -77,7 +95,7 @@ button#renderBtn:hover { background: #254db3; }
 .editor-panel {
     width: 0; background: white; border-left: 1px solid #ddd;
     box-shadow: -2px 0 10px rgba(0,0,0,0.05);
-    transition: width 0.3s ease;
+    transition: width 0.25s cubic-bezier(0.2, 0, 0, 1);
     overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0;
     z-index: 15;
 }
@@ -133,3 +151,41 @@ path[data-rate]:hover { opacity: 0.8; stroke: #FFFF00 !important; stroke-width: 
     display: none; z-index: 9999; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
 }
 .placeholder { padding: 50px; color: #999; }
+
+/* === 视图切换器 === */
+.view-switcher {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%); /* 居中 */
+    background: white;
+    padding: 5px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    gap: 5px;
+    z-index: 100;
+}
+
+.view-switcher button {
+    background: transparent;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.view-switcher button:hover {
+    background: #f0f0f0;
+}
+
+/* 激活状态 */
+.view-switcher button.active {
+    background: #333;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}

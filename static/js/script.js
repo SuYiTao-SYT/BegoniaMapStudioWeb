@@ -66,7 +66,9 @@ async function renderMap(preserveZoom = false) {
             } else {
                 applyTransform(); // 旧图更新，保持位置
             }
-            
+            if (currentViewMode === 'seats') {
+                switchView('seats'); 
+            }
             // 清空文件框
             svgInput.value = ''; 
             csvInput.value = ''; 
@@ -87,12 +89,24 @@ async function renderMap(preserveZoom = false) {
 function initZoomControls() {
     const viewport = document.getElementById('mapViewport');
     
-    // 滚轮缩放
+    // === 滚轮缩放 (以鼠标为中心) ===
     viewport.addEventListener('wheel', (e) => {
         e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        zoomMap(delta);
-    });
+        
+        // 1. 获取鼠标相对于 mapViewport 的坐标
+        const rect = viewport.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // 2. 决定缩放方向和力度
+        // 这里的 0.1 是基础步长，你可以根据手感调整
+        // 也可以做成 multiplicative (乘法) 缩放，比如 scale * 1.1，那样更平滑
+        const delta = e.deltaY > 0 ? -0.2 : 0.2; 
+        
+        // 3. 传入鼠标坐标
+        zoomMap(delta, mouseX, mouseY);
+
+    }, { passive: false });
 
     // 鼠标拖拽平移
     viewport.addEventListener('mousedown', (e) => {
@@ -102,12 +116,26 @@ function initZoomControls() {
         viewport.style.cursor = 'grabbing';
     });
 
+    // === 关键优化：使用 requestAnimationFrame 节流 ===
+    let isTicking = false; // 锁
+
     window.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
         e.preventDefault();
-        currentTranslateX = e.clientX - startDragX;
-        currentTranslateY = e.clientY - startDragY;
-        applyTransform();
+
+        // 记录最新坐标，但不立即应用
+        const nextX = e.clientX - startDragX;
+        const nextY = e.clientY - startDragY;
+
+        if (!isTicking) {
+            window.requestAnimationFrame(() => {
+                currentTranslateX = nextX;
+                currentTranslateY = nextY;
+                applyTransform();
+                isTicking = false; // 解锁，允许下一帧更新
+            });
+            isTicking = true;
+        }
     });
 
     window.addEventListener('mouseup', () => {
@@ -116,19 +144,66 @@ function initZoomControls() {
     });
 }
 
-function zoomMap(amount) {
+// === 缩放核心逻辑 (修正版：配合 transform-origin: 0 0) ===
+function zoomMap(amount, originX, originY) {
     let newScale = currentScale + amount;
-    // 限制缩放范围
+
+    // 1. 限制缩放范围
     if (newScale < 0.2) newScale = 0.2;
-    if (newScale > 5.0) newScale = 5.0;
+    if (newScale > 10.0) newScale = 10.0; // 可以稍微放宽一点上限
+
+    // 2. 获取视口尺寸
+    const viewport = document.getElementById('mapViewport');
+    const rect = viewport.getBoundingClientRect();
+
+    // 3. 确定缩放中心 (锚点)
+    // 如果是滚轮缩放，originX/Y 是鼠标相对于 viewport 的坐标
+    // 如果是按钮缩放，则取屏幕中心
+    if (originX === undefined || originY === undefined) {
+        originX = rect.width / 2;
+        originY = rect.height / 2;
+    }
+
+    // 4. 核心数学公式：保持鼠标下的点不动
+    // 公式：
+    // WorldX = (MouseX - TranslateX) / OldScale
+    // NewTranslateX = MouseX - (WorldX * NewScale)
+    
+    // a. 计算鼠标指向的点在"地图内部"的坐标 (World Coordinate)
+    const worldX = (originX - currentTranslateX) / currentScale;
+    const worldY = (originY - currentTranslateY) / currentScale;
+
+    // b. 反推新的位移，使得该点在缩放后依然位于 originX, originY
+    currentTranslateX = originX - (worldX * newScale);
+    currentTranslateY = originY - (worldY * newScale);
+
+    // 5. 应用
     currentScale = newScale;
     applyTransform();
 }
 
+// === 重置缩放 (修正版：让地图居中) ===
 function resetZoom() {
     currentScale = 1;
-    currentTranslateX = 0;
-    currentTranslateY = 0;
+    
+    // 简单的居中计算 (假设地图大概占视口的 90%)
+    const viewport = document.getElementById('mapViewport');
+    const container = document.getElementById('svgContainer');
+    
+    if (viewport && container) {
+        const vRect = viewport.getBoundingClientRect();
+        const cRect = container.getBoundingClientRect(); // 此时还没transform，获取的是原始尺寸
+        
+        // 简单的居中算法：(视口宽 - 内容宽) / 2
+        // 注意：因为 transform-origin 是 0 0，我们需要手动把它推到中间
+        // 这里只是一个估算，为了初次显示好看
+        currentTranslateX = (vRect.width - cRect.width) / 2;
+        currentTranslateY = 20; // 顶部留一点空隙
+    } else {
+        currentTranslateX = 0;
+        currentTranslateY = 0;
+    }
+    
     applyTransform();
 }
 
@@ -355,8 +430,64 @@ async function saveChanges() {
 function closePanel() {
     document.getElementById('editorPanel').classList.remove('open');
 }
+// === 视图切换逻辑 ===
+let currentViewMode = 'result'; // 'result' 或 'seats'
 
+function switchView(mode) {
+    currentViewMode = mode;
+    
+    // 1. 更新按钮样式
+    document.getElementById('btnViewResult').className = mode === 'result' ? 'active' : '';
+    document.getElementById('btnViewSeats').className = mode === 'seats' ? 'active' : '';
+
+    // 2. 遍历所有选区修改颜色
+    const districts = document.querySelectorAll('path[data-party]');
+    
+    districts.forEach(path => {
+        if (mode === 'result') {
+            // A. 恢复选情颜色
+            const orgColor = path.getAttribute('data-org-color');
+            if (orgColor) {
+                path.style.fill = orgColor;
+            }
+        } else {
+            // B. 席位热力图模式
+            const seats = parseInt(path.getAttribute('data-seats')) || 0;
+            path.style.fill = getSeatHeatmapColor(seats);
+        }
+    });
+}
+
+// 辅助：生成席位热力图颜色 (金色系)
+function getSeatHeatmapColor(seats) {
+    if (seats === 0) return '#eeeeee'; // 无改选
+    if (seats === 1) return '#FFECB3'; // 浅金 (1席)
+    if (seats === 2) return '#FFC107'; // 亮金 (2席)
+    if (seats === 3) return '#FF8F00'; // 橙金 (3席)
+    if (seats >= 4)  return '#D84315'; // 深橙红 (多席大区)
+    return '#eeeeee';
+}
 // 页面加载完成后初始化缩放控制器
 window.onload = function() {
+    // 1. 初始化缩放控制器
     initZoomControls();
+
+    // 2. === 新增：绑定高性能模式开关 ===
+    const speedToggle = document.getElementById('optimizeSpeedToggle');
+    const svgContainer = document.getElementById('svgContainer');
+
+    // 监听切换
+    speedToggle.addEventListener('change', (e) => {
+        if (e.target.checked) {
+            svgContainer.classList.add('fast-mode');
+            console.log("已开启高性能模式: optimizeSpeed");
+        } else {
+            svgContainer.classList.remove('fast-mode');
+            console.log("已关闭高性能模式: geometricPrecision");
+        }
+    });
+
+    // 默认行为：为了流畅体验，我们可以默认帮用户勾选上（可选）
+    // speedToggle.checked = true;
+    // svgContainer.classList.add('fast-mode');
 };

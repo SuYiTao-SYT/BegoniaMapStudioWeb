@@ -44,12 +44,12 @@ def add_top_legend(root, party_colors, party_seats, custom_title, stroke_width=1
     bg.set('style', "fill:#FFFFFF; stroke:none;")
 
     # B. 标题
-    title_y = new_min_y + 180
+    title_y = new_min_y + 220
     title_node = ET.SubElement(legend_group, 'text')
     title_node.text = custom_title
     title_node.set('x', str(min_x + width / 2))
     title_node.set('y', str(title_y))
-    title_node.set('style', "font-size:64px; font-family:sans-serif; font-weight:bold; text-anchor:middle; fill:#000000;")
+    title_node.set('style', "font-size:128px; font-family:sans-serif; font-weight:bold; text-anchor:middle; fill:#000000;")
 
     if not party_colors: return
 
@@ -184,30 +184,33 @@ def render_map_from_data(svg_path, output_path, district_data, party_colors, par
                 elif '-' in d_id:
                     data = district_data.get(d_id)
                     if data:
-                        # === 关键逻辑：处理0席位 ===
                         seats = data.get('seats', 1)
                         
                         if seats == 0:
-                            # 0席位模式：强制灰色 / 条纹
-                            # 我们可以用灰色表示"无改选"
-                            fill_color = "#eeeeee" 
-                            # 或者你可以定义一个特殊的 pattern，但灰色最简单
-                            
-                            # 虽然不改选，但也可以显示个提示
-                            element.set('data-rate', '非改选')
-                            element.set('data-party', '无')
+                            # 0席位 (无改选)
+                            fill_color = "#eeeeee"
+                            rate_str = "非改选"
+                            winner_str = "无"
                         else:
                             fill_color = data['color']
-                            rate_percent = f"{int(data['rate'] * 100)}%"
-                            element.set('data-rate', rate_percent)
-                            if 'winner_name' in data:
-                                element.set('data-party', data['winner_name'])
+                            rate_str = f"{int(data['rate'] * 100)}%"
+                            winner_str = data.get('winner_name', '')
+
+                        # === 关键修改：埋入更多数据供 JS 切换视图使用 ===
+                        element.set('data-rate', rate_str)
+                        element.set('data-party', winner_str)
+                        element.set('data-seats', str(seats))           # 埋入席位
+                        element.set('data-org-color', fill_color)       # 埋入原始选情色
                         
                         style = f"fill:{fill_color}; stroke:#FFFFFF; stroke-width:{district_stroke}; stroke-linejoin:round;"
                         element.set('style', style)
                         matches += 1
                     else:
                         # 无数据
+                        # 也要埋个默认值，防止 JS 报错
+                        element.set('data-seats', "0")
+                        element.set('data-org-color', "#f0f0f0")
+                        
                         style = f"fill:#f0f0f0; stroke:#FFFFFF; stroke-width:{district_stroke}; stroke-linejoin:round;"
                         element.set('style', style)
                     
