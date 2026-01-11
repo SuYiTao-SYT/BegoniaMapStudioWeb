@@ -1,6 +1,8 @@
 // 全局变量
 let currentEditingId = null;
-
+let selectedDistricts = new Set();
+let globalPartyList = [];
+let isBatchMode = false;
 // === 缩放相关变量 ===
 let currentScale = 1;
 let currentTranslateX = 0;
@@ -84,7 +86,23 @@ async function renderMap(preserveZoom = false) {
         btn.disabled = false;
     }
 }
-
+// === 初始化高亮图层 ===
+// 这个函数需要在 renderMap 成功后调用一次
+function initHighlightLayer() {
+    const svg = document.querySelector('#svgContainer svg');
+    if (!svg) return;
+    
+    // 检查是否已经有高亮层
+    let layer = document.getElementById('highlight-layer');
+    if (!layer) {
+        layer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        layer.id = 'highlight-layer';
+        // 关键：设为 pointer-events: none，让鼠标能穿透替身点到底下的真身
+        // 这样你依然可以拖拽、点击
+        layer.style.pointerEvents = 'none'; 
+        svg.appendChild(layer); // 放在最后，即最顶层
+    }
+}
 // === 2. 缩放和平移逻辑 (新增) ===
 function initZoomControls() {
     const viewport = document.getElementById('mapViewport');
@@ -219,11 +237,19 @@ function attachInteractiveEvents() {
     const tooltip = document.getElementById('tooltip');
     const districts = document.querySelectorAll('path[data-party]');
 
-    // 每次渲染后，重新初始化缩放监听器(其实只要监听一次viewport即可，为了保险起见在onload调用)
-    // 注意：initZoomControls 应该只运行一次，我们放在文件最底部调用
+    // 【关键在这里！】每次地图渲染完，必须先初始化高亮层
+    initHighlightLayer();
+
+    console.log(`[调试] 绑定交互事件: 找到了 ${districts.length} 个选区`);
+
+    // 重新初始化缩放逻辑 (防止缩放失效)
+    if (typeof initZoomControls === 'function') {
+        // 这里的逻辑有点冗余，但为了保险起见确保缩放器能抓到新的 viewport
+        // 通常 initZoomControls 在 window.onload 跑一次就够了
+    }
 
     districts.forEach(path => {
-        // A. 悬浮
+        // A. 悬浮显示信息
         path.addEventListener('mousemove', (e) => {
             const party = path.getAttribute('data-party');
             const rate = path.getAttribute('data-rate');
@@ -243,20 +269,91 @@ function attachInteractiveEvents() {
             tooltip.style.display = 'none';
         });
 
-        // B. 点击 (因为现在有拖拽，我们需要区分是"点击"还是"拖拽结束")
-        // 简单处理：判断鼠标按下和抬起的时间差或位移，这里简单用 click 事件
+        // B. 点击事件 (区分 Shift)
         path.addEventListener('click', async (e) => {
-            // 如果正在拖拽地图，不触发点击
             if (isDragging) return; 
-            
             e.stopPropagation(); 
-            openEditor(path.id);
+
+            if (e.shiftKey) {
+                // Shift + 点击 -> 多选/反选
+                toggleSelection(path);
+            } else {
+                // 普通点击 -> 打开编辑器
+                console.log(`[调试] 单击选区: ${path.id}`);
+                openEditor(path.id);
+            }
         });
     });
+    
+    // C. 点击空白处清空 (防止Shift误触)
+    const container = document.getElementById('svgContainer');
+    // 使用 onmouseup 避免多次绑定
+    container.onmouseup = (e) => {
+        // 没按Shift才清空
+        if (!e.shiftKey) {
+            clearSelection();
+        }
+    };
+}
+// === 多选逻辑 ===
+function toggleSelection(pathElement) {
+    const id = pathElement.id;
+    const layer = document.getElementById('highlight-layer');
+    
+    if (selectedDistricts.has(id)) {
+        // === 反选：移除替身 ===
+        selectedDistricts.delete(id);
+        
+        // 找到对应的替身并删除
+        // 替身的 ID 约定为 "highlight-原ID"
+        const clone = document.getElementById(`highlight-${id}`);
+        if (clone) layer.removeChild(clone);
+        
+        // 移除原元素的标记（仅用于逻辑判断，不负责样式）
+        pathElement.classList.remove('selected-source');
+
+    } else {
+        // === 选中：创建替身 ===
+        selectedDistricts.add(id);
+        pathElement.classList.add('selected-source');
+        
+        // 创建 <use> 标签
+        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+        use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", `#${id}`);
+        use.id = `highlight-${id}`;
+        
+        // 给替身加样式类
+        use.classList.add('highlight-clone');
+        
+        layer.appendChild(use);
+    }
+    
+    console.log(`当前选中了 ${selectedDistricts.size} 个选区`);
+    
+    renderBatchPanel();
 }
 
+// === 清空选择 ===
+function clearSelection() {
+    selectedDistricts.clear();
+    const layer = document.getElementById('highlight-layer');
+    if (layer) layer.innerHTML = ''; // 直接清空所有替身
+    
+    // 清除原元素的标记
+    document.querySelectorAll('.selected-source').forEach(el => el.classList.remove('selected-source'));
+    document.getElementById('editorPanel').classList.remove('open');
+    console.log("已清空选择");
+}
 // === 4. 打开编辑器 ===
 async function openEditor(id) {
+    isBatchMode = false;
+    
+    // UI 切换
+    document.getElementById('editorPanel').classList.add('open');
+    document.getElementById('modeSingle').style.display = 'block';
+    document.getElementById('modeBatch').style.display = 'none';
+    document.getElementById('btnSaveCommon').textContent = "💾 保存并更新";
+
     currentEditingId = id;
     const panel = document.getElementById('editorPanel');
     const title = document.getElementById('panelTitle');
@@ -302,7 +399,9 @@ async function openEditor(id) {
                     partyList.push({ id: key, name: key, count: val });
                 }
             }
-
+            if (globalPartyList.length === 0 && partyList.length > 0) {
+                globalPartyList = partyList.map(p => ({id: p.id, name: p.name}));
+            }
             partyList.forEach(item => {
                 const percent = currentTotalVotes > 0 ? ((item.count / currentTotalVotes) * 100).toFixed(1) : 0;
                 
@@ -380,7 +479,13 @@ async function openEditor(id) {
         title.textContent = "加载错误";
     }
 }
-
+function handleSaveAction() {
+    if (isBatchMode) {
+        applyBatchSwing();
+    } else {
+        saveChanges();
+    }
+}
 // === 5. 保存修改 (优化版：保持面板打开) ===
 async function saveChanges() {
     if (!currentEditingId) return;
@@ -466,6 +571,80 @@ function getSeatHeatmapColor(seats) {
     if (seats === 3) return '#FF8F00'; // 橙金 (3席)
     if (seats >= 4)  return '#D84315'; // 深橙红 (多席大区)
     return '#eeeeee';
+}
+function renderBatchPanel() {
+    isBatchMode = true;
+    
+    // UI 切换
+    document.getElementById('editorPanel').classList.add('open');
+    document.getElementById('panelTitle').textContent = `批量操作`;
+    
+    document.getElementById('modeSingle').style.display = 'none';
+    document.getElementById('modeBatch').style.display = 'block';
+    
+    // 更新数据显示
+    document.getElementById('batchCountDisplay').textContent = selectedDistricts.size;
+    
+    // 填充政党下拉框 (如果还没填过)
+    const select = document.getElementById('batchPartySelect');
+    if (select.options.length === 0 && globalPartyList.length > 0) {
+        select.innerHTML = globalPartyList.map(p => 
+            `<option value="${p.id}">${p.name}</option>`
+        ).join('');
+    }
+    
+    // 绑定滑条显示 (也可以放在 window.onload 里只绑一次)
+    const slider = document.getElementById('batchSwingSlider');
+    slider.oninput = (e) => {
+        const val = e.target.value;
+        const display = document.getElementById('swingValueDisplay');
+        display.textContent = (val > 0 ? '+' : '') + val + '%';
+        display.style.color = val > 0 ? '#d32f2f' : (val < 0 ? '#388e3c' : '#333');
+    };
+    
+    // 修改按钮文字
+    document.getElementById('btnSaveCommon').textContent = "⚡ 应用批量摇摆";
+}
+async function applyBatchSwing() {
+    const partyId = document.getElementById('batchPartySelect').value;
+    const percent = document.getElementById('batchSwingSlider').value;
+    const lockTotal = document.getElementById('batchLockTotal').checked; // 获取 Checkbox 状态
+    const districtIds = Array.from(selectedDistricts);
+    
+    if (parseFloat(percent) === 0) {
+        alert("摇摆幅度为 0");
+        return;
+    }
+
+    const btn = document.getElementById('btnSaveCommon');
+    const oldText = btn.textContent;
+    btn.textContent = "计算中...";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/batch/swing', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                district_ids: districtIds,
+                party_id: partyId,
+                percent: percent,
+                lock_total: lockTotal // 发送给后端
+            })
+        });
+
+        if (res.ok) {
+            await renderMap(true); 
+        } else {
+            alert("更新失败");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("网络错误");
+    } finally {
+        btn.textContent = oldText;
+        btn.disabled = false;
+    }
 }
 // 页面加载完成后初始化缩放控制器
 window.onload = function() {

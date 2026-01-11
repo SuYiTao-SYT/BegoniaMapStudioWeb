@@ -82,16 +82,48 @@
             </div>
             
             <div class="panel-content">
-                <div class="section">
-                    <label>本区议员人数 (0为不改选):</label>
-                    <input type="number" id="editSeats" style="width:100%; padding:8px; margin-top:5px;" min="0">
+                
+                <div id="modeSingle" class="editor-mode-section">
+                    <div class="section">
+                        <label>本区议员人数 (0为不改选):</label>
+                        <input type="number" id="editSeats" style="width:100%; padding:8px; margin-top:5px;" min="0">
+                    </div>
+                    <hr>
+                    <div id="voteInputs" class="vote-list"></div>
                 </div>
 
-                <hr>
+                <div id="modeBatch" class="editor-mode-section" style="display:none;">
+                    <div class="batch-info-box">
+                        <p>对选中的 <b id="batchCountDisplay">0</b> 个选区进行统一摇摆。</p>
+                        
+                        <div class="form-group">
+                            <label>选择受益政党:</label>
+                            <select id="batchPartySelect" style="width:100%; padding:8px;"></select>
+                        </div>
+                        
+                        <div class="form-group checkbox-group">
+                            <label title="勾选：此消彼长 (总票数不变)；不勾：只增不减 (总票数增加)">
+                                <input type="checkbox" id="batchLockTotal" checked> 
+                                🔒 锁定总票数 (零和博弈)
+                            </label>
+                        </div>
 
-                <div id="voteInputs" class="vote-list"></div>
+                        <div class="form-group">
+                            <label>摇摆幅度: <span id="swingValueDisplay" style="color:#3366CC">0%</span></label>
+                            <div class="slider-wrapper">
+                                <span class="small-text">-20%</span>
+                                <input type="range" id="batchSwingSlider" min="-20" max="20" step="0.5" value="0">
+                                <span class="small-text">+20%</span>
+                            </div>
+                            <p class="help-text">
+                                勾选锁定：从其他党扣票补给该党。会挤掉别人的票数<br>
+                                不勾锁定：直接修改该党票数，总票数变化。不会挤掉别人
+                            </p>
+                        </div>
+                    </div>
+                </div>
 
-                <button class="btn-save" onclick="saveChanges()">💾 保存并更新</button>
+                <button class="btn-save" id="btnSaveCommon" onclick="handleSaveAction()">💾 保存并更新</button>
             </div>
         </div>
 

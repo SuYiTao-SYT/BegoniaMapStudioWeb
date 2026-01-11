@@ -131,6 +131,40 @@ def update_district_api():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+@app.route('/api/batch/swing', methods=['POST'])
+def batch_swing_api():
+    try:
+        req = request.json
+        # 1. 获取前端传来的参数
+        district_ids = req.get('district_ids', [])
+        party_id = req.get('party_id')
+        percent = req.get('percent')      # 例如 "5.5"
+        lock_total = req.get('lock_total', True) # 获取锁定开关 (默认True)
+        
+        # 2. 校验参数
+        if not district_ids or not party_id:
+            return jsonify({'error': '参数缺失: 需选择选区和政党'}), 400
 
+        # 3. 数据转换
+        # 前端传的是 5.5 (代表5.5%)，后端计算需要 0.055
+        try:
+            swing_rate = float(percent) / 100.0
+        except (ValueError, TypeError):
+            return jsonify({'error': '数值格式错误'}), 400
+        
+        # 4. 调用逻辑核心
+        success = data_mgr.batch_swing_update(district_ids, party_id, swing_rate, lock_total)
+        
+        if success:
+            return jsonify({'status': 'success'})
+        else:
+            return jsonify({'status': 'no_change', 'message': '没有数据被改变'}), 200
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc() # 在后台打印详细报错，方便调试
+        return jsonify({'error': str(e)}), 500
 if __name__ == '__main__':
+    print("正在启动 MapStudio Web v3.0...")
+    print("请在浏览器访问: http://127.0.0.1:5000")
     app.run(debug=True, port=5000)

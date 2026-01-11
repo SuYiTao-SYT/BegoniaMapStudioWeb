@@ -320,3 +320,105 @@ class DataManager:
             writer.writerows(rows)
             
         return True
+    def batch_swing_update(self, district_ids, target_party_id, swing_percent, lock_total=True):
+        """
+        批量摇摆更新 (完整版)
+        :param district_ids: 选区ID列表
+        :param target_party_id: 目标政党ID
+        :param swing_percent: 摇摆比例 (0.05 = 5%)
+        :param lock_total: 是否锁定总票数
+        """
+        # 读取现有票数
+        all_rows = []
+        fieldnames = []
+        
+        if not os.path.exists(self.files['votes']):
+            return False
+
+        with open(self.files['votes'], 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames
+            all_rows = list(reader)
+
+        changed_count = 0
+        
+        for row in all_rows:
+            # 只修改选中的选区
+            if row['District_ID'] in district_ids:
+                # 1. 计算该区总票数 & 读取当前各党票数
+                current_votes = {} 
+                total_votes = 0
+                
+                for k, v in row.items():
+                    if k != 'District_ID' and k in fieldnames and v and v.strip().isdigit():
+                        val = int(v)
+                        current_votes[k] = val
+                        total_votes += val
+                
+                if total_votes == 0: continue
+
+                # 2. 计算变动量 (Delta)
+                delta_votes = int(total_votes * swing_percent)
+                
+                # 获取目标政党当前票数
+                target_current = current_votes.get(target_party_id, 0)
+                
+                # 3. 边界检查：防止减成负数
+                # 预测一下修改后的票数
+                final_target_votes = target_current + delta_votes
+                
+                if final_target_votes < 0:
+                    # 如果不够扣，就扣光为止
+                    delta_votes = -target_current
+                
+                # 如果算出来没变化（比如票数太少，乘百分比后不到1票），跳过
+                if delta_votes == 0: continue
+
+                # === 执行修改 ===
+                
+                # A. 更新目标政党 (无论是锁还是不锁，目标党都要变)
+                row[target_party_id] = str(target_current + delta_votes)
+                
+                # B. 零和博弈逻辑 (如果锁定了总票数)
+                if lock_total:
+                    # 目标党增加了 delta，其他人就要分担 -delta
+                    remaining_delta = -delta_votes
+                    
+                    # 找出"其他政党" (排除自己)
+                    other_parties = [p for p in current_votes if p != target_party_id]
+                    other_total = sum(current_votes[p] for p in other_parties)
+                    
+                    if other_total > 0:
+                        # 按比例分摊
+                        distributed_sum = 0
+                        for i, p in enumerate(other_parties):
+                            p_current = current_votes[p]
+                            
+                            # 最后一个党负责兜底(处理除不尽的余数)，保证总数严丝合缝
+                            if i == len(other_parties) - 1:
+                                share = remaining_delta - distributed_sum
+                            else:
+                                ratio = p_current / other_total
+                                share = int(remaining_delta * ratio)
+                                distributed_sum += share
+                            
+                            # 防止其他党被扣成负数 (理论上应该很少发生，但要防御)
+                            new_val = p_current + share
+                            if new_val < 0: new_val = 0
+                            
+                            row[p] = str(new_val)
+                    else:
+                        # 如果没有其他党可扣，那就没法锁定总票数了，只能看着它变
+                        pass
+
+                changed_count += 1
+
+        # 写回文件
+        if changed_count > 0:
+            with open(self.files['votes'], 'w', encoding='utf-8-sig', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(all_rows)
+            return True
+        
+        return False

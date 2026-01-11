@@ -1,0 +1,11 @@
+core/__pycache__/
+__pycache__/
+*.pyc
+static/data_workspace/
+venv/
+env/
+uploads/
+.venv/
+.env
+.vscode/
+.DS_Store

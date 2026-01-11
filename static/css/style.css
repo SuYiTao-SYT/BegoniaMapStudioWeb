@@ -189,3 +189,79 @@ path[data-rate]:hover { opacity: 0.8; stroke: #FFFF00 !important; stroke-width: 
     color: white;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
+
+/* === 多选高亮样式 === */
+/* 原元素被选中时，本身不需要变，或者只需轻微变暗/变亮 */
+.selected-source {
+    /* 可选：原元素轻微变色，作为底色 */
+    opacity: 1.0;
+}
+
+/* 替身样式 (在最顶层) */
+.highlight-clone {
+    /* 1. 填充透明 */
+    fill: none !important; 
+    
+    /* 2. 描边：纯白，细致一点 */
+    stroke: #ffffff !important; 
+    stroke-width: 2.5px !important; /* 改细一点，更精致 */
+    
+    /* 3. 滤镜：改为"悬浮投影"而非"霓虹发光" */
+    /* drop-shadow(偏移X 偏移Y 模糊度 颜色) */
+    /* 这里加了一个黑色的投影，让选区看起来"浮"在地图上方，立体感强，但不刺眼 */
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.6));
+    
+    /* 4. 交互穿透 */
+    pointer-events: none;
+    
+    /* 5. 动画：改为非常缓慢的"呼吸"效果，或者直接去掉 */
+    /* 如果觉得完全静止太死板，可以保留这个微弱的呼吸 */
+    animation: gentle-breath 3s infinite ease-in-out;
+}
+
+@keyframes gentle-breath {
+    0% { stroke-opacity: 0.8; stroke-width: 2.5px; }
+    50% { stroke-opacity: 1.0; stroke-width: 3.5px; } /* 稍微变粗一点点 */
+    100% { stroke-opacity: 0.8; stroke-width: 2.5px; }
+}
+
+/* 编辑模式切换 */
+.editor-mode-section {
+    animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* 批量面板样式 */
+.batch-info-box {
+    padding: 15px;
+    background: #f0f8ff;
+    border-radius: 6px;
+    border: 1px solid #cceeff;
+    margin-bottom: 20px;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: bold;
+    color: #333;
+}
+.checkbox-group input {
+    width: auto;
+    margin-right: 8px;
+}
+
+.slider-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 5px;
+}
+.slider-wrapper input { flex: 1; }
+.small-text { font-size: 12px; color: #666; }
+.help-text { font-size: 12px; color: #888; margin-top: 8px; line-height: 1.4; }
