@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MapStudio Web v3.0</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <div class="container">
+        
+        <div class="sidebar">
+            <h1>MapStudio Web</h1>
+            <div class="card">
+                <h3>1. 上传文件</h3>
+                <div class="form-group">
+                    <label>SVG 地图模版</label>
+                    <input type="file" id="svgFile" accept=".svg">
+                </div>
+                <div class="form-group">
+                    <label>CSV 选举数据</label>
+                    <input type="file" id="csvFile" accept=".csv">
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>2. 渲染设置</h3>
+                <div class="form-group">
+                    <label>地图标题</label>
+                    <input type="text" id="mapTitle" value="202X年 众议院大选" placeholder="输入标题">
+                </div>
+                <div class="form-group">
+                    <label>描边粗细 (pt)</label>
+                    <select id="strokeWidth">
+                        <option value="0">0 (无描边)</option>
+                        <option value="0.5">0.5 (极细)</option>
+                        <option value="1.0" selected>1.0 (标准)</option>
+                        <option value="2.0">2.0 (加粗)</option>
+                        <option value="3.0">3.0 (特粗)</option>
+                    </select>
+                </div>
+                <button id="renderBtn" onclick="renderMap()">🚀 生成地图</button>
+            </div>
+
+            <div class="card download-card" id="downloadArea" style="display:none;">
+                <a id="downloadLink" href="#" download="map_result.svg" class="btn-download">⬇️ 下载 SVG 文件</a>
+            </div>
+        </div>
+
+        <div class="preview-area">
+            <div id="svgContainer" class="svg-wrapper">
+                <div class="placeholder">请上传文件并点击生成...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

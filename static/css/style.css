@@ -1,0 +1,93 @@
+body { margin: 0; font-family: 'Segoe UI', sans-serif; background-color: #f4f4f9; height: 100vh; overflow: hidden; }
+
+.container { display: flex; height: 100%; }
+
+/* 左侧栏 */
+.sidebar {
+    width: 320px;
+    background: white;
+    padding: 20px;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    z-index: 10;
+}
+
+h1 { color: #333; font-size: 24px; margin-top: 0; }
+h3 { font-size: 16px; color: #666; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+
+.card { background: #fff; }
+.form-group { margin-bottom: 15px; }
+label { display: block; font-size: 14px; margin-bottom: 5px; color: #555; }
+input[type="text"], select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;}
+input[type="file"] { font-size: 12px; }
+
+button#renderBtn {
+    width: 100%; padding: 12px; background: #3366CC; color: white; border: none;
+    border-radius: 4px; cursor: pointer; font-size: 16px; transition: 0.2s;
+}
+button#renderBtn:hover { background: #254db3; }
+
+.btn-download {
+    display: block; width: 100%; padding: 12px; background: #28a745; color: white;
+    text-align: center; text-decoration: none; border-radius: 4px; box-sizing: border-box;
+}
+
+/* 右侧预览区 */
+.preview-area {
+    flex: 1;
+    background: #e0e0e0;
+    position: relative;
+    overflow: auto; /* 允许滚动 */
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px;
+}
+
+.svg-wrapper {
+    background: white;
+    box-shadow: 0 0 20px rgba(0,0,0,0.2);
+    /* 限制最大宽度，防止过大 */
+    max-width: 95%; 
+}
+
+.placeholder { padding: 50px; color: #999; }
+
+/* 交互特效 */
+path[data-rate] { cursor: pointer; transition: opacity 0.15s; }
+path[data-rate]:hover { opacity: 0.7; stroke: #FFFF00 !important; stroke-width: 2px !important; }
+
+/* Tooltip */
+.tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    pointer-events: none;
+    display: none;
+    z-index: 1000;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+/* 强制修正 SVG 的显示尺寸 */
+#svgContainer svg {
+    width: 100% !important;  /* 强制宽度撑满容器 */
+    height: auto !important; /* 高度自动按比例 */
+    display: block;          /* 防止底部留白 */
+    background-color: white; /* 加上白底，防止透明看不清 */
+}
+
+/* 确保预览区能滚动 */
+.preview-area {
+    display: block; /* 改为 block 方便滚动 */
+    text-align: center;
+}
+
+.svg-wrapper {
+    display: inline-block; /* 让容器包裹 SVG */
+    width: 95%;
+}
